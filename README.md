@@ -16,7 +16,7 @@ The assignment was to use the jetAudio jetCast Server 2.0 to find a buffer overf
 
 The Exploit-DB page also contained a download for the program which I used to download and install it on my Windows 7 machine. At this point I was ready to recreate the POC and move forward from there.
 
-## Writing a Fuzzer
+## Writing a POC
 In order to make sure the POC worked, I rewrote it using Python:
 ```
 buf = "A" * 5000
@@ -25,6 +25,8 @@ f.write(buf)
 f.close()
 ```
 I then sent the buffer.txt file over to my Windows machine. I launched Immunity Debugger, opened the jetCast Server, and pressed F9 to run the program. Following the instructions the POC gave, I opened the Config menu and copy and pasted in the 5000 A's. I clicked OK and then Start. The program promptly crashed and I received an "Access violation" error. Looking at the registers we can see that EIP has been overwritten by hex 41 (A) characters. Looks like the POC is working as it should.
+
+If we did not have a POC to start with, we would need to write a fuzzer. To do this, we would just keep increasing the length of the buffer being sent to the input field until we received an access violation in Immunity.
 
 ## Finding the EIP offset
 Now that we know there is a buffer overflow, we need to find where in the buffer of A's the EIP offset is. We need to do this so that we can know how large our buffer needs to be in order to place a return address into EIP later on. 
@@ -45,7 +47,7 @@ To make sure the offset found is correct, we rewrite the code to now include thr
 ```
 offset = "A" * 532
 eip = "B" * 4
-buffer = "C" * 32
+buffer = "C" * (5000 - len(offset) - len(eip))
 payload = offset + eip + buffer
 
 f = open('offset.txt', 'w')
@@ -56,10 +58,8 @@ We again run the code, transfer to Windows, launch Immunity and jetCast, and inp
 
 Next we look at ESP to see where ESP is currently pointing to. We can right-click the ESP address in the upper-right window in Immunity (the Registers windows) and choose "Follow in Dump". This will move the lower-left window to the address currently stored in ESP. We can see that it begins immediately after our EIP register, so this is good news as it will make it a little easier to place our shellcode later on.
 
-At this point, we could also test to make sure we can create enough space for our shellcode. To do this, just continue to increase the "buffer" variable. On average, shellcode is within 350-400 bytes long, so we can set a buffer variable equal to 400 and make sure it doesn't get cut off. Luckily this program will create enough space for our shellcode in this location so we do not need to do any further testing.
-
 ## Checking For Bad Characters
-The next step before we find a return address is to check for bad characters. Bad characters will be any hex value between \x00 and \xff that would cause the string to terminate. The reason for checking for this is to make sure that our return address and shellcode do not contain any bad characters. If they did, it would cause the program to stop execution when it reached the bad character and our exploit wouldn't work. In order to test for this, we simply create a string with all characters from "\x01" through "\xFF" and place it into the ESP register.
+The next step before we find a return address is to check for bad characters. Bad characters will be any hex value between \x01 and \xff that would cause the string to terminate. The reason for checking for this is to make sure that our return address and shellcode do not contain any bad characters. If they did, it would cause the program to stop execution when it reached the bad character and our exploit wouldn't work. In order to test for this, we simply create a string with all characters from "\x01" through "\xFF" and place it into the ESP register.
 
 **NOTE:** To be thorough, we can add \x00 in the list as well. However, this is almost always going to be a bad character as it represents a null-byte which will terminate the string. Every time I have tested it, it has been a bad character so I generally will not test for it. 
 
@@ -82,7 +82,7 @@ Our code should now look like:
 ```
 offset = "A" * 532
 eip = "\x55\x9d\xef\x77"
-buffer = "C" * 32
+buffer = "C" * (5000 - len(offset) - len(eip))
 
 payload = offset + eip + buffer
 ```
@@ -132,7 +132,7 @@ Breakdown:
 
 After msfvenom generates the shellcode, we can copy and paste it into our code where the ESP variable was.
 
-However, it is also good practice to prepend the shellcode with NOP instructions. This will allow the shellcode to still execute in the event that our shellcode doesn't begin at exactly where we want it to for some reason. The NOP (No Operation)instructions will tell the program to simply move to the next instruction. This can be important because if the program were to shift our shellcode off by one byte, then it would not work. Realistically, in this situation, we are probably fine without a NOP sled, but it is good practice and would be needed in other situations.
+However, it is also good practice to prepend the shellcode with NOP instructions. This will allow the shellcode to still execute in the event that our shellcode doesn't begin at exactly where we want it to for some reason. The NOP (No Operation) instructions will tell the program to simply move to the next instruction. This can be important because if the program were to shift our shellcode off by one byte, then it would not work. Realistically, in this situation, we are probably fine without a NOP sled, but it is good practice and would be needed in other situations.
 
 Our code should now look like:
 ```
